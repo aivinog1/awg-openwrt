@@ -46,16 +46,35 @@ jobs:
           find . -type f -name "*.sh" -exec chmod +x {} \;
           find . -type f -name "*.pl" -exec chmod +x {} \;
 
-      - name: Prepare feeds
-        working-directory: sdk
+      - name: Prepare and verify feeds
         run: |
-          echo "src-link awgopenwrt ../awg" >> feeds.conf
+          set -euxo pipefail
+          echo ">>> Creating feeds.conf"
+          echo "src-link awgopenwrt ../awg" > feeds.conf
+
+          echo ">>> Updating feeds..."
           ./scripts/feeds update awgopenwrt
+
+          echo ">>> Installing feeds..."
           ./scripts/feeds install -a -p awgopenwrt
+
+          echo ">>> Checking package/feeds/awgopenwrt"
+          ls -lah package/feeds/awgopenwrt || { echo "❌ Feed packages not found!"; exit 1; }
+
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
           make defconfig
+
+      - name: Build AmneziaWG packages
+        run: |
+          set -euxo pipefail
+          echo ">>> Building kmod-amneziawg"
+          make package/feeds/awgopenwrt/kmod-amneziawg/compile V=s
+          echo ">>> Building amneziawg-tools"
+          make package/feeds/awgopenwrt/amneziawg-tools/compile V=s
+          echo ">>> Building luci-app-amneziawg"
+          make package/feeds/awgopenwrt/luci-app-amneziawg/compile V=s
 
       - name: Build packages
         working-directory: sdk
