@@ -4,11 +4,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  sdk:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Set vars
-        id: vars
         run: |
           echo "VER=23.05.6" >> $GITHUB_ENV
           echo "TARGET=mediatek" >> $GITHUB_ENV
@@ -16,6 +15,7 @@ jobs:
           echo "SDK_FILE=openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz" >> $GITHUB_ENV
           echo "SDK_URL=https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic" >> $GITHUB_ENV
 
+      # Кэшируем SDK архив
       - name: Cache SDK archive
         id: cache-sdk-archive
         uses: actions/cache@v4
@@ -25,53 +25,51 @@ jobs:
 
       - name: Download SDK archive
         if: steps.cache-sdk-archive.outputs.cache-hit != 'true'
-        run: |
-          wget -q "${SDK_URL}/${SDK_FILE}"
+        run: wget -q "${SDK_URL}/${SDK_FILE}"
 
+      # Кэшируем ccache (ускорение сборки)
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      # Распаковываем SDK
       - name: Extract SDK
         run: |
-          mkdir -p sdk
+          rm -rf sdk
+          mkdir sdk
           tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
           ls -lah sdk | head
 
-      - name: Upload SDK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-sdk
-          path: sdk
-
-  build:
-    runs-on: ubuntu-latest
-    needs: sdk
-    defaults:
-      run:
-        working-directory: sdk
-    steps:
-      - name: Download SDK artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: openwrt-sdk
-          path: sdk
-
+      # Чекаутим awg
       - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
           ref: master
           path: awg
 
-      - name: Fix permissions after cache/artifact restore
-        run: |
-          echo ">>> Fixing permissions in SDK..."
-          chmod -R +x scripts
-          chmod -R +x staging_dir/host/bin || true
-          find . -type f -name "*.sh" -exec chmod +x {} \;
-          find . -type f -name "*.pl" -exec chmod +x {} \;
-          echo ">>> Permissions fixed."
-
+      # Готовим feeds
       - name: Prepare feeds
+        working-directory: sdk
         run: |
           echo "src-link awgopenwrt ../awg" >> feeds.conf
           ./scripts/feeds update awgopenwrt
           ./scripts/feeds install -a -p awgopenwrt
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           make defconfig
+
+      # Собираем модуль
+      - name: Build kmod-amneziawg
+        working-directory: sdk
+        run: |
+          make package/feeds/awgopenwrt/kmod-amneziawg/{clean,compile} V=s
+
+      # Сохраняем артефакты
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: amneziawg-ipks
+          path: sdk/bin/packages/*/awgopenwrt/kmod-amneziawg_*.ipk
