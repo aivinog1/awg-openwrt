@@ -26,11 +26,21 @@ jobs:
           key: sdk-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
 
       - name: Download + Extract SDK
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
+          set -euo pipefail
+          VER=23.05.6
+          TARGET=mediatek
+          SUBTARGET=filogic
+          SDK_FILE="openwrt-sdk-${VER}-${TARGET}-${SUBTARGET}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}"
+
           wget -q "${SDK_URL}/${SDK_FILE}"
-          tar -xJf "${SDK_FILE}"
-          mv openwrt-sdk-* sdk
+          mkdir -p sdk
+          # распаковываем напрямую в sdk, убирая верхний уровень каталога
+          tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
+
+          # быстрая проверка, что SDK на месте
+          test -f sdk/feeds.conf.default
 
   build:
     runs-on: ubuntu-latest
