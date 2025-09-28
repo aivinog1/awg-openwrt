@@ -16,33 +16,40 @@ jobs:
           echo "SDK_FILE=openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz" >> $GITHUB_ENV
           echo "SDK_URL=https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic" >> $GITHUB_ENV
 
-      - name: Cache SDK
-        id: cache-sdk
+      - name: Cache SDK archive
+        id: cache-sdk-archive
         uses: actions/cache@v4
         with:
-          path: sdk
-          key: sdk-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
+          path: ${{ env.SDK_FILE }}
+          key: sdk-archive-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
 
-      - name: Download + Extract SDK
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
+      - name: Download SDK archive
+        if: steps.cache-sdk-archive.outputs.cache-hit != 'true'
         run: |
-          set -euo pipefail
           wget -q "${SDK_URL}/${SDK_FILE}"
+
+      - name: Extract SDK
+        run: |
           mkdir -p sdk
           tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
           ls -lah sdk | head
 
-      - name: Fix permissions
-        run: |
-          chmod -R +x sdk/scripts
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-sdk
+          path: sdk
 
   build:
     runs-on: ubuntu-latest
     needs: sdk
-    defaults:
-      run:
-        working-directory: sdk
     steps:
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openwrt-sdk
+          path: sdk
+
       - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
@@ -50,14 +57,17 @@ jobs:
           path: awg
 
       - name: Prepare feeds
+        working-directory: sdk
         run: |
           echo "src-link awgopenwrt ../awg" >> feeds.conf
+          chmod +x ./scripts/feeds
           ./scripts/feeds update awgopenwrt
           ./scripts/feeds install -a -p awgopenwrt
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           make defconfig
 
       - name: Build kmod-amneziawg
+        working-directory: sdk
         run: |
           make package/feeds/awgopenwrt/kmod-amneziawg/{clean,compile} V=s
 
