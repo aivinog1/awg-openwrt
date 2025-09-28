@@ -1,0 +1,53 @@
+name: Test AmneziaWG SDK Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout awg-openwrt repo
+        uses: actions/checkout@v4
+        with:
+          repository: yury-sannikov/awg-openwrt
+          ref: master
+          path: awg
+
+      - name: Download OpenWrt SDK
+        run: |
+          VER=23.05.6
+          TARGET=mediatek
+          SUBTARGET=filogic
+          SDK_FILE="openwrt-sdk-${VER}-${TARGET}-${SUBTARGET}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}/${SDK_FILE}"
+          curl -fLO "$SDK_URL"
+          tar -xJf "$SDK_FILE"
+          mv openwrt-sdk-* sdk
+
+      - name: Prepare feeds
+        working-directory: sdk
+        run: |
+          echo "src-link awgopenwrt ../awg" >> feeds.conf
+          ./scripts/feeds update awgopenwrt
+          ./scripts/feeds install -a -p awgopenwrt
+
+      - name: Patch Makefile for SDK
+        run: |
+          sed -i '/cp -fr \$$(LINUX_DIR)\/drivers\/net\/wireguard/d' awg/kmod-amneziawg/Makefile
+          sed -i '/cp -f \$$(LINUX_DIR)\/include\/uapi\/linux\/wireguard.h/d' awg/kmod-amneziawg/Makefile
+          sed -i '/Build\/Prepare/a \
+\tcp -fr src/* $$(PKG_BUILD_DIR)/' awg/kmod-amneziawg/Makefile
+
+      - name: Build kmod-amneziawg
+        working-directory: sdk
+        run: |
+          make defconfig
+          make package/kmod-amneziawg/{clean,compile} V=s
+
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmod-amneziawg-test
+          path: sdk/bin/packages/*/awgopenwrt/kmod-amneziawg_*.ipk
