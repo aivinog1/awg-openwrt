@@ -47,6 +47,7 @@ jobs:
           find . -type f -name "*.pl" -exec chmod +x {} \;
 
       - name: Prepare and verify feeds
+        working-directory: sdk
         run: |
           set -euxo pipefail
           echo ">>> Creating feeds.conf"
@@ -67,6 +68,7 @@ jobs:
           make defconfig
 
       - name: Build AmneziaWG packages
+        working-directory: sdk
         run: |
           set -euxo pipefail
           echo ">>> Building kmod-amneziawg"
@@ -74,13 +76,6 @@ jobs:
           echo ">>> Building amneziawg-tools"
           make package/feeds/awgopenwrt/amneziawg-tools/compile V=s
           echo ">>> Building luci-app-amneziawg"
-          make package/feeds/awgopenwrt/luci-app-amneziawg/compile V=s
-
-      - name: Build packages
-        working-directory: sdk
-        run: |
-          make package/feeds/awgopenwrt/kmod-amneziawg/compile V=s
-          make package/feeds/awgopenwrt/amneziawg-tools/compile V=s
           make package/feeds/awgopenwrt/luci-app-amneziawg/compile V=s
 
       - name: Upload artifacts
