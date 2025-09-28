@@ -43,36 +43,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: sdk
+    defaults:
+      run:
+        working-directory: sdk
     steps:
-      - name: Download SDK artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: openwrt-sdk
-          path: sdk
-
       - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
           ref: master
           path: awg
 
+      - name: Fix permissions after cache/artifact restore
+        run: |
+          echo ">>> Fixing permissions in SDK..."
+          chmod -R +x scripts
+          chmod -R +x staging_dir/host/bin || true
+          find . -type f -name "*.sh" -exec chmod +x {} \;
+          find . -type f -name "*.pl" -exec chmod +x {} \;
+          echo ">>> Permissions fixed."
+
       - name: Prepare feeds
-        working-directory: sdk
         run: |
           echo "src-link awgopenwrt ../awg" >> feeds.conf
-          chmod +x ./scripts/feeds
           ./scripts/feeds update awgopenwrt
           ./scripts/feeds install -a -p awgopenwrt
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           make defconfig
-
-      - name: Build kmod-amneziawg
-        working-directory: sdk
-        run: |
-          make package/feeds/awgopenwrt/kmod-amneziawg/{clean,compile} V=s
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: amneziawg-ipks
-          path: sdk/bin/packages/*/awgopenwrt/kmod-amneziawg_*.ipk
