@@ -47,6 +47,12 @@ jobs:
       run:
         working-directory: sdk
     steps:
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openwrt-sdk
+          path: sdk
+
       - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
