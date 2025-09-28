@@ -48,24 +48,26 @@ jobs:
 
       - name: Prepare and verify feeds
         working-directory: sdk
+        env:
+          FEED_PATH: ${{ github.workspace }}/awg   # абсолютный путь!
         run: |
           set -euxo pipefail
+
           echo ">>> Creating feeds.conf"
-          echo "src-link awgopenwrt ../awg" > feeds.conf
+          echo "src-link awgopenwrt ${FEED_PATH}" > feeds.conf
 
           echo ">>> Updating feeds..."
-          ./scripts/feeds update awgopenwrt
+          ./scripts/feeds update -v awgopenwrt
 
-          echo ">>> Installing feeds..."
+          echo ">>> Listing packages seen in feed (sanity)"
+          ./scripts/feeds list -s awgopenwrt
+
+          echo ">>> Installing feed packages..."
           ./scripts/feeds install -a -p awgopenwrt
 
-          echo ">>> Checking package/feeds/awgopenwrt"
-          ls -lah package/feeds/awgopenwrt || { echo "❌ Feed packages not found!"; exit 1; }
-
-          echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
-          echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
-          make defconfig
+          echo ">>> Verifying symlinks under package/feeds/awgopenwrt"
+          test -d package/feeds/awgopenwrt
+          ls -lah package/feeds/awgopenwrt
 
       - name: Build AmneziaWG packages
         working-directory: sdk
