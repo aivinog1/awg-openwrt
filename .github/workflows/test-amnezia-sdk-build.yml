@@ -38,7 +38,7 @@ jobs:
           sed -i '/cp -fr \$$(LINUX_DIR)\/drivers\/net\/wireguard/d' awg/kmod-amneziawg/Makefile
           sed -i '/cp -f \$$(LINUX_DIR)\/include\/uapi\/linux\/wireguard.h/d' awg/kmod-amneziawg/Makefile
           sed -i '/Build\/Prepare/a \
-\tcp -fr src/* $$(PKG_BUILD_DIR)/' awg/kmod-amneziawg/Makefile
+          cp -fr src/* $$(PKG_BUILD_DIR)/' awg/kmod-amneziawg/Makefile
 
       - name: Build kmod-amneziawg
         working-directory: sdk
