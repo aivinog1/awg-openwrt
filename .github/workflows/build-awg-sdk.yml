@@ -33,8 +33,9 @@ jobs:
         run: |
           set -euo pipefail
           wget -q "${SDK_URL}${SDK_FILE}"
-          tar -xf "${SDK_FILE}"
-          SDK_DIR=$(tar -tf "${SDK_FILE}" | head -1 | cut -f1 -d"/")
+          xz -t "${SDK_FILE}"
+          tar -xJf "${SDK_FILE}"
+          SDK_DIR=$(find . -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -n1)
           mv "$SDK_DIR" sdk
 
       - name: Cache SDK dl/
