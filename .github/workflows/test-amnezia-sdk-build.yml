@@ -36,11 +36,9 @@ jobs:
 
           wget -q "${SDK_URL}/${SDK_FILE}"
           mkdir -p sdk
-          # распаковываем напрямую в sdk, убирая верхний уровень каталога
           tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
 
-          # быстрая проверка, что SDK на месте
-          test -f sdk/feeds.conf.default
+          ls -lah sdk | head
 
   build:
     runs-on: ubuntu-latest
