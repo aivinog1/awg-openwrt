@@ -6,11 +6,8 @@ on:
 jobs:
   sdk:
     runs-on: ubuntu-latest
-    outputs:
-      sdk-dir: ${{ steps.cache-sdk.outputs.cache-hit }}
     steps:
       - name: Set vars
-        id: vars
         run: |
           echo "VER=23.05.6" >> $GITHUB_ENV
           echo "TARGET=mediatek" >> $GITHUB_ENV
@@ -19,7 +16,6 @@ jobs:
           echo "SDK_URL=https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic" >> $GITHUB_ENV
 
       - name: Cache SDK
-        id: cache-sdk
         uses: actions/cache@v4
         with:
           path: sdk
@@ -27,26 +23,27 @@ jobs:
 
       - name: Download + Extract SDK
         run: |
-          set -euo pipefail
-          VER=23.05.6
-          TARGET=mediatek
-          SUBTARGET=filogic
-          SDK_FILE="openwrt-sdk-${VER}-${TARGET}-${SUBTARGET}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}"
-
           wget -q "${SDK_URL}/${SDK_FILE}"
           mkdir -p sdk
           tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
-
           ls -lah sdk | head
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-sdk
+          path: sdk
 
   build:
     runs-on: ubuntu-latest
     needs: sdk
-    defaults:
-      run:
-        working-directory: sdk
     steps:
+      - name: Download SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: openwrt-sdk
+          path: sdk
+
       - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
@@ -54,6 +51,7 @@ jobs:
           path: awg
 
       - name: Prepare feeds
+        working-directory: sdk
         run: |
           echo "src-link awgopenwrt ../awg" >> feeds.conf
           ./scripts/feeds update awgopenwrt
@@ -62,6 +60,7 @@ jobs:
           make defconfig
 
       - name: Build kmod-amneziawg
+        working-directory: sdk
         run: |
           make package/feeds/awgopenwrt/kmod-amneziawg/{clean,compile} V=s
 
