@@ -1,56 +1,64 @@
-name: Test AmneziaWG SDK Build
+name: Build AmneziaWG with SDK
 
 on:
   workflow_dispatch:
 
 jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    outputs:
+      sdk-dir: ${{ steps.cache-sdk.outputs.cache-hit }}
+    steps:
+      - name: Set vars
+        id: vars
+        run: |
+          echo "VER=23.05.6" >> $GITHUB_ENV
+          echo "TARGET=mediatek" >> $GITHUB_ENV
+          echo "SUBTARGET=filogic" >> $GITHUB_ENV
+          echo "SDK_FILE=openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz" >> $GITHUB_ENV
+          echo "SDK_URL=https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic" >> $GITHUB_ENV
+
+      - name: Cache SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: sdk
+          key: sdk-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
+
+      - name: Download + Extract SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          wget -q "${SDK_URL}/${SDK_FILE}"
+          tar -xJf "${SDK_FILE}"
+          mv openwrt-sdk-* sdk
+
   build:
     runs-on: ubuntu-latest
-
+    needs: sdk
+    defaults:
+      run:
+        working-directory: sdk
     steps:
-      - name: Checkout awg-openwrt repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: yury-sannikov/awg-openwrt
           ref: master
           path: awg
 
-      - name: Download OpenWrt SDK
-        run: |
-          VER=23.05.6
-          TARGET=mediatek
-          SUBTARGET=filogic
-          SDK_FILE="openwrt-sdk-${VER}-${TARGET}-${SUBTARGET}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}/"
-
-          wget -q "${SDK_URL}${SDK_FILE}"
-          tar -xJf "${SDK_FILE}"
-          SDK_DIR=$(find . -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -n1)
-          echo "SDK_DIR=$SDK_DIR"
-          mv "$SDK_DIR" sdk
-
       - name: Prepare feeds
-        working-directory: sdk
         run: |
           echo "src-link awgopenwrt ../awg" >> feeds.conf
           ./scripts/feeds update awgopenwrt
           ./scripts/feeds install -a -p awgopenwrt
-
-      - name: Patch Makefile for SDK
-        run: |
-          sed -i '/cp -fr \$$(LINUX_DIR)\/drivers\/net\/wireguard/d' awg/kmod-amneziawg/Makefile
-          sed -i '/cp -f \$$(LINUX_DIR)\/include\/uapi\/linux\/wireguard.h/d' awg/kmod-amneziawg/Makefile
-          sed -i '/Build\/Prepare/a \
-          cp -fr src/* $$(PKG_BUILD_DIR)/' awg/kmod-amneziawg/Makefile
+          echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
+          make defconfig
 
       - name: Build kmod-amneziawg
-        working-directory: sdk
         run: |
-          make defconfig
-          make package/kmod-amneziawg/{clean,compile} V=s
+          make package/feeds/awgopenwrt/kmod-amneziawg/{clean,compile} V=s
 
       - name: Save artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kmod-amneziawg-test
+          name: amneziawg-ipks
           path: sdk/bin/packages/*/awgopenwrt/kmod-amneziawg_*.ipk
