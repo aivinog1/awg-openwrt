@@ -21,10 +21,13 @@ jobs:
           TARGET=mediatek
           SUBTARGET=filogic
           SDK_FILE="openwrt-sdk-${VER}-${TARGET}-${SUBTARGET}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}/${SDK_FILE}"
-          curl -fLO "$SDK_URL"
-          tar -xJf "$SDK_FILE"
-          mv openwrt-sdk-* sdk
+          SDK_URL="https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}/"
+
+          wget -q "${SDK_URL}${SDK_FILE}"
+          tar -xJf "${SDK_FILE}"
+          SDK_DIR=$(find . -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -n1)
+          echo "SDK_DIR=$SDK_DIR"
+          mv "$SDK_DIR" sdk
 
       - name: Prepare feeds
         working-directory: sdk
