@@ -34,8 +34,8 @@ jobs:
           set -euo pipefail
           wget -q "${SDK_URL}${SDK_FILE}"
           tar -xf "${SDK_FILE}"
-          # Переименуем папку SDK в короткое имя
-          mv openwrt-sdk-* sdk
+          SDK_DIR=$(tar -tf "${SDK_FILE}" | head -1 | cut -f1 -d"/")
+          mv "$SDK_DIR" sdk
 
       - name: Cache SDK dl/
         uses: actions/cache@v4
