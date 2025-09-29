@@ -61,9 +61,10 @@ jobs:
         working-directory: sdk
         run: |
           set -euxo pipefail
-          make package/feeds/awgopenwrt/kmod-amneziawg/{download,prepare,compile} V=s
-          make package/feeds/awgopenwrt/amneziawg-tools/{download,prepare,compile} V=s
-          make package/feeds/awgopenwrt/luci-app-amneziawg/{download,prepare,compile} V=s
+          # kmod-amneziawg не имеет download, сразу prepare+compile
+          make package/feeds/awgopenwrt/kmod-amneziawg/{prepare,compile} V=s
+          make package/feeds/awgopenwrt/amneziawg-tools/{prepare,compile} V=s
+          make package/feeds/awgopenwrt/luci-app-amneziawg/{prepare,compile} V=s
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
