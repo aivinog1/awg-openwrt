@@ -1,4 +1,4 @@
-name: Build AmneziaWG (full OpenWrt)
+name: Build AmneziaWG only
 
 on:
   workflow_dispatch:
@@ -7,55 +7,68 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout OpenWrt
-        uses: actions/checkout@v4
-        with:
-          repository: openwrt/openwrt
-          ref: v23.05.6
-          fetch-depth: 0
-
       - name: Set vars
         run: |
           echo "VER=23.05.6" >> $GITHUB_ENV
           echo "TARGET=mediatek" >> $GITHUB_ENV
           echo "SUBTARGET=filogic" >> $GITHUB_ENV
+          echo "SDK_FILE=openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz" >> $GITHUB_ENV
+          echo "SDK_URL=https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic" >> $GITHUB_ENV
 
-      - name: Cache buildroot
+      - name: Cache SDK archive
+        id: cache-sdk
         uses: actions/cache@v4
         with:
-          path: |
-            build_dir
-            staging_dir
-            dl
-          key: buildroot-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
+          path: ${{ env.SDK_FILE }}
+          key: sdk-archive-${{ env.VER }}-${{ env.TARGET }}-${{ env.SUBTARGET }}
+
+      - name: Download SDK archive
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          wget -q "${SDK_URL}/${SDK_FILE}"
+
+      - name: Extract SDK
+        run: |
+          mkdir -p sdk
+          tar -xJf "${SDK_FILE}" -C sdk --strip-components=1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: yury-sannikov/awg-openwrt
+          ref: master
+          path: awg
+
+      - name: Fix permissions
+        working-directory: sdk
+        run: |
+          chmod -R +x scripts
+          chmod -R +x staging_dir/host/bin || true
+          find . -type f -name "*.sh" -exec chmod +x {} \;
+          find . -type f -name "*.pl" -exec chmod +x {} \;
 
       - name: Prepare feeds
+        working-directory: sdk
         run: |
-          echo "src-git awgopenwrt https://github.com/yury-sannikov/awg-openwrt.git" >> feeds.conf.default
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Configure
-        run: |
-          cp feeds.conf.default feeds.conf
-          wget https://downloads.openwrt.org/releases/${VER}/targets/${TARGET}/${SUBTARGET}/config.buildinfo -O .config
+          echo "src-link awgopenwrt ../awg" > feeds.conf
+          ./scripts/feeds update awgopenwrt
+          ./scripts/feeds install -a -p awgopenwrt
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
           make defconfig
 
-      - name: Build
+      - name: Build AmneziaWG packages only
+        working-directory: sdk
         run: |
-          make -j$(nproc) V=s
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p awgrelease
-          cp bin/packages/*/awgopenwrt/*.ipk awgrelease/ || true
-          cp bin/targets/${TARGET}/${SUBTARGET}/packages/kmod-amneziawg_*.ipk awgrelease/ || true
+          set -euxo pipefail
+          make package/feeds/awgopenwrt/kmod-amneziawg/{download,prepare,compile} V=s
+          make package/feeds/awgopenwrt/amneziawg-tools/{download,prepare,compile} V=s
+          make package/feeds/awgopenwrt/luci-app-amneziawg/{download,prepare,compile} V=s
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: amneziawg-fullbuild
-          path: awgrelease/*.ipk
+          name: amneziawg-ipks
+          path: |
+            sdk/bin/packages/*/awgopenwrt/*.ipk
+            sdk/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/packages/kmod-amneziawg_*.ipk
